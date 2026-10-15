@@ -1,0 +1,39 @@
+# ============================================================
+# PulsePPG Stress Platform — Cuatro Raspberry Pi simuladas
+# Se combina con compose.yaml; el arranque normal no cambia:
+#   docker compose -f compose.yaml -f compose.sim.yaml up -d --wait
+# Los contenedores pi1..pi4 quedan en espera. Se entra a cada uno y se ejecuta
+# fake_pi.py con su dispositivo y perfil (ver README, "Cuatro Pi simuladas").
+# ============================================================
+
+x-pi-sim: &pi-sim
+  # Misma imagen que el Ingestor (Python 3.12 + paho-mqtt); se construye una
+  # vez con el nombre pulseppg-pi-sim y la comparten los cuatro contenedores.
+  build: ./ingestor
+  image: pulseppg-pi-sim
+  restart: "no"
+  # init: el contenedor se detiene al momento con docker compose down/stop.
+  init: true
+  working_dir: /sim
+  volumes:
+    - ./tests/ingestor:/sim:ro
+  command: ["sleep", "infinity"]
+  depends_on:
+    mosquitto:
+      condition: service_healthy
+  networks:
+    - pulseppg
+
+services:
+  pi1:
+    <<: *pi-sim
+    container_name: pulseppg-pi1
+  pi2:
+    <<: *pi-sim
+    container_name: pulseppg-pi2
+  pi3:
+    <<: *pi-sim
+    container_name: pulseppg-pi3
+  pi4:
+    <<: *pi-sim
+    container_name: pulseppg-pi4
