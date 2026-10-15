@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-10 col-md-6 col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h4 mb-3">Consulta tu resultado</h1>
+        <p class="text-secondary">Escribe el código de 6 caracteres que mostró el dispositivo al terminar la prueba.</p>
+        <form action="/consulta" method="get">
+          <input class="form-control form-control-lg text-uppercase text-center font-monospace mb-3{% if error %} is-invalid{% endif %}"
+                 name="code" value="{{ code or '' }}" maxlength="12" autocomplete="off"
+                 autocapitalize="characters" placeholder="K7M2XP" required autofocus>
+          {% if error %}<div class="invalid-feedback mb-3 d-block">{{ error }}</div>{% endif %}
+          <button class="btn btn-primary btn-lg w-100" type="submit">Consultar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

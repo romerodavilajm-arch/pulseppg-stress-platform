@@ -1,7 +1,6 @@
 # ============================================================
 # PulsePPG Stress Platform — Servicios Docker
-# Incluye la base de datos, Mosquitto, el Ingestor y el Analyzer HRV.
-# La API se añadirá como servicio en esta misma red.
+# Incluye la base de datos, Mosquitto, el Ingestor, el Analyzer HRV y la API.
 # ============================================================
 
 services:
@@ -73,6 +72,7 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
       POLL_SECONDS: ${ANALYZER_POLL_SECONDS:-60}
+      MAX_ATTEMPTS: ${HRV_MAX_ATTEMPTS:-3}
       HRV_SQI_MIN: ${HRV_SQI_MIN:-0.86}
       HRV_PI_MIN: ${HRV_PI_MIN:-0.1}
       HRV_SNR_MIN_DB: ${HRV_SNR_MIN_DB:-0}
@@ -84,6 +84,32 @@ services:
       db:
         condition: service_healthy
       mosquitto:
+        condition: service_healthy
+    networks:
+      - pulseppg
+
+  api:
+    build: ./api
+    container_name: pulseppg-api
+    restart: unless-stopped
+    environment:
+      # Debe coincidir con MAX_ATTEMPTS del Analyzer para saber cuándo un
+      # análisis fallido ya no se reintentará.
+      HRV_MAX_ATTEMPTS: ${HRV_MAX_ATTEMPTS:-3}
+      API_TIMEZONE: ${API_TIMEZONE:-America/Mexico_City}
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-pulseppg}
+      PGUSER: ${POSTGRES_USER:-pulseppg}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-pulseppg}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      db:
         condition: service_healthy
     networks:
       - pulseppg

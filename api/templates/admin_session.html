@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Sesión {{ session.id }} · Administración · PulsePPG{% endblock %}
+{% block home %}/admin{% endblock %}
+{% block nav %}<span class="navbar-text small">Administración</span>{% endblock %}
+{% block content %}
+{% set s = session %}{% set a = session.analysis %}
+<a class="small" href="/admin">&larr; Todas las sesiones</a>
+<h1 class="h4 mt-2 mb-3">Sesión {{ s.id }} <span class="font-monospace text-secondary">{{ s.session_code }}</span></h1>
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="card"><div class="card-body">
+      <h2 class="h6">Captura</h2>
+      <dl class="row small mb-0">
+        <dt class="col-5 fw-normal text-secondary">Dispositivo</dt><dd class="col-7">{{ s.device_key }}</dd>
+        <dt class="col-5 fw-normal text-secondary">Inicio</dt><dd class="col-7">{{ s.started_at | localtime }}</dd>
+        <dt class="col-5 fw-normal text-secondary">Fin</dt><dd class="col-7">{{ s.finished_at | localtime }}</dd>
+        <dt class="col-5 fw-normal text-secondary">Duración</dt><dd class="col-7">{{ s.duration_seconds | duration }}</dd>
+        <dt class="col-5 fw-normal text-secondary">Muestras</dt><dd class="col-7">{{ s.sample_count }}</dd>
+        <dt class="col-5 fw-normal text-secondary">Recibida</dt><dd class="col-7">{{ s.created_at | localtime }}</dd>
+        <dt class="col-5 fw-normal text-secondary">SHA-256</dt><dd class="col-7 font-monospace text-break mb-0">{{ s.file_hash }}</dd>
+      </dl>
+    </div></div>
+  </div>
+  <div class="col-12 col-lg-7">
+    <div class="card"><div class="card-body">
+      <h2 class="h6">Analyzer HRV</h2>
+      <p class="mb-2">{% include "_result_badge.html" %}
+        {% if a.score is not none %}<span class="ms-2">Índice {{ (a.score * 100) | round | int }}/100 · {{ a.rules_met }} de 4 reglas</span>{% endif %}
+        {% if a.computed_at %}<span class="small text-secondary ms-2">{{ a.computed_at | localtime }}</span>{% endif %}
+      </p>
+      {% if a.failure %}<p class="small text-secondary">Último error ({{ a.failure.attempts }} intento{{ 's' if a.failure.attempts != 1 }}): <code>{{ a.failure.error }}</code></p>{% endif %}
+      {% if a.label == "low_quality" %}<p class="small text-secondary">Señal de baja calidad: solo se muestran las métricas de calidad; las de HRV no son fiables.</p>{% endif %}
+      {% if a.metrics %}
+      <table class="table table-sm small mb-0">
+        <thead><tr><th>Métrica</th><th class="text-end">Valor</th></tr></thead>
+        <tbody>
+        {% for metric, value in a.metrics.items() %}
+          <tr><td class="font-monospace">{{ metric }}</td><td class="text-end">{{ value | number(3) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}
