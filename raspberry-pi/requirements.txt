@@ -1,0 +1,6 @@
+# Dependencias del nodo, instaladas en /opt/pulseppg/venv (ver setup.md).
+# RPi.GPIO para el buzzer lo da el paquete del sistema python3-rpi-lgpio,
+# visible en el venv porque se crea con --system-site-packages.
+paho-mqtt==2.1.0
+smbus2==0.6.1
+RPLCD==1.4.0

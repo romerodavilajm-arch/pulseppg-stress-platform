@@ -209,6 +209,10 @@ El script imprime el ACK con el `session_code`, que se consulta en `http://local
 
 Para detener todo, incluidos los simuladores, usa los mismos archivos: `docker compose -f compose.yaml -f compose.sim.yaml down`.
 
+## Raspberry Pi real
+
+La carpeta [`raspberry-pi/`](raspberry-pi/) contiene el programa del nodo (Raspberry Pi 5 + MAX30102, LCD 16x2 y buzzer) y [`raspberry-pi/setup.md`](raspberry-pi/setup.md), la guía para instalar Raspberry Pi OS Lite, cablear el sensor, configurar el nodo como servicio systemd y darlo de alta en el servidor. Cumple el mismo contrato MQTT que `fake_pi.py`, así que el servidor no cambia.
+
 ## Documentación
 
 Consulta [`docs/flujo.md`](docs/flujo.md) para el recorrido completo de los datos, las decisiones de diseño y el detalle del pipeline ETL.
