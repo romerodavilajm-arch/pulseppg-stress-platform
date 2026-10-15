@@ -86,7 +86,7 @@ Un clasificador de machine learning futuro puede implementarse como un Analyzer 
 
 ## Prueba local de la base de datos
 
-Por ahora `docker-compose.yml` solo levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`.
+Por ahora `compose.yaml` solo levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`.
 
 ```bash
 cp .env.example .env            # opcional: credenciales y puerto
