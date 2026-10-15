@@ -86,15 +86,40 @@ Un clasificador de machine learning futuro puede implementarse como un Analyzer 
 
 ## Prueba local de la base de datos
 
-Por ahora `compose.yaml` solo levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`.
+`compose.yaml` levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`, Mosquitto y el Ingestor.
 
 ```bash
 cp .env.example .env            # opcional: credenciales y puerto
-docker compose up -d --wait db  # espera a que init.sql termine y la BD esté sana
+docker compose up -d --wait     # construye el Ingestor y espera a que todo esté sano
 docker compose exec -T db psql -U pulseppg -d pulseppg -v ON_ERROR_STOP=1 < tests/db/smoke_test.sql
 ```
 
 La prueba termina con `SMOKE TEST OK` y no deja datos (corre en una transacción con `ROLLBACK`). `init.sql` solo se ejecuta con el volumen vacío; para recrear la base desde cero: `docker compose down -v`.
+
+## Prueba local del Ingestor (sin Raspberry Pi)
+
+`tests/ingestor/fake_pi.py` simula la Pi: genera 5 minutos de señal a 50 Hz, la comprime en JSONL + gzip, calcula su SHA-256, la publica en `ppg/{device_key}/session` y espera el ACK. `tests/ingestor/e2e.sh` registra el dispositivo `test-pi`, envía una sesión válida, comprueba en la BD que existen la sesión y sus 15 000 muestras, y verifica los ACK de error por hash incorrecto y por dispositivo no registrado.
+
+```bash
+docker compose up -d --wait
+./tests/ingestor/e2e.sh
+```
+
+La prueba termina con `INGESTOR E2E OK (session_code=XXXXXX)`. A diferencia de la prueba de humo, deja la sesión de prueba en la base. Los logs del Ingestor se ven con `docker compose logs -f ingestor`.
+
+Formato del mensaje en `ppg/{device_key}/session`:
+
+```json
+{
+  "started_at": "2026-01-01T10:00:00+00:00",
+  "finished_at": "2026-01-01T10:05:00+00:00",
+  "sample_count": 15000,
+  "file_hash": "<sha256 hex del archivo .jsonl.gz>",
+  "data": "<archivo .jsonl.gz en base64>"
+}
+```
+
+Cada línea del JSONL es una muestra `{"time": "<ISO 8601>", "ir": <int>, "red": <int>}`. El ACK de error lleva `error` con `invalid_payload`, `unknown_device` o `internal`. Los dispositivos deben estar dados de alta en `devices` antes de enviar.
 
 ## Documentación
 
