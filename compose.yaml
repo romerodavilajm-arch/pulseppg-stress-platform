@@ -1,0 +1,36 @@
+# ============================================================
+# PulsePPG Stress Platform — Servicios Docker
+# Por ahora solo incluye la base de datos. Mosquitto, Ingestor,
+# Analyzer y API se añadirán como servicios en esta misma red.
+# ============================================================
+
+services:
+  db:
+    image: timescale/timescaledb:2.30.2-pg16
+    container_name: pulseppg-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pulseppg}
+      POSTGRES_USER: ${POSTGRES_USER:-pulseppg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulseppg}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # init.sql solo se ejecuta cuando el volumen está vacío.
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    # -h 127.0.0.1 fuerza TCP: durante la ejecución de init.sql el servidor
+    # temporal solo escucha por socket, así no se marca sano antes de tiempo.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pulseppg
+
+volumes:
+  pgdata:
+
+networks:
+  pulseppg:

@@ -84,6 +84,18 @@ Un clasificador de machine learning futuro puede implementarse como un Analyzer 
 
 ---
 
+## Prueba local de la base de datos
+
+Por ahora `compose.yaml` solo levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`.
+
+```bash
+cp .env.example .env            # opcional: credenciales y puerto
+docker compose up -d --wait db  # espera a que init.sql termine y la BD esté sana
+docker compose exec -T db psql -U pulseppg -d pulseppg -v ON_ERROR_STOP=1 < tests/db/smoke_test.sql
+```
+
+La prueba termina con `SMOKE TEST OK` y no deja datos (corre en una transacción con `ROLLBACK`). `init.sql` solo se ejecuta con el volumen vacío; para recrear la base desde cero: `docker compose down -v`.
+
 ## Documentación
 
 Consulta [`docs/flujo.md`](docs/flujo.md) para el recorrido completo de los datos, las decisiones de diseño y el detalle del pipeline ETL.
