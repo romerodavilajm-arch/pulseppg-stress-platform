@@ -1,6 +1,6 @@
 # ============================================================
 # PulsePPG Stress Platform — Servicios Docker
-# Por ahora solo incluye la base de datos. Mosquitto, Ingestor,
+# Por ahora incluye la base de datos, Mosquitto y el Ingestor.
 # Analyzer y API se añadirán como servicios en esta misma red.
 # ============================================================
 
@@ -29,8 +29,45 @@ services:
     networks:
       - pulseppg
 
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22
+    container_name: pulseppg-mosquitto
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pulseppg
+
+  ingestor:
+    build: ./ingestor
+    container_name: pulseppg-ingestor
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-pulseppg}
+      PGUSER: ${POSTGRES_USER:-pulseppg}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-pulseppg}
+    depends_on:
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - pulseppg
+
 volumes:
   pgdata:
+  mosquitto-data:
 
 networks:
   pulseppg:
