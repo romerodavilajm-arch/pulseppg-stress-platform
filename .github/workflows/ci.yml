@@ -1,0 +1,48 @@
+# ============================================================
+# PulsePPG Stress Platform — Integración continua
+# Levanta el stack de compose.yaml y corre las pruebas existentes
+# (base de datos, Ingestor, Analyzer y API) en cada PR y push a main.
+# ============================================================
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir y levantar los servicios
+        run: docker compose up -d --build --wait
+
+      - name: Prueba de humo de la base de datos
+        run: |
+          docker compose exec -T db psql -U pulseppg -d pulseppg \
+              -v ON_ERROR_STOP=1 < tests/db/smoke_test.sql
+
+      - name: E2E del Ingestor
+        run: ./tests/ingestor/e2e.sh
+
+      - name: E2E del Analyzer
+        run: ./tests/analyzer/e2e.sh
+
+      - name: E2E de la API
+        run: ./tests/api/e2e.sh
+
+      - name: Logs de los servicios
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - name: Bajar los servicios
+        if: always()
+        run: docker compose down -v
