@@ -215,7 +215,7 @@ La carpeta [`raspberry-pi/`](raspberry-pi/) contiene el programa del nodo (Raspb
 
 ## Documentación
 
-Consulta [`docs/flujo.md`](docs/flujo.md) para el recorrido completo de los datos, las decisiones de diseño y el detalle del pipeline ETL.
+Consulta [`docs/manual.md`](docs/manual.md) para el manual de uso (arranque, mediciones, consulta, pruebas y cómo añadir sensores o analizadores) y [`docs/flujo.md`](docs/flujo.md) para el recorrido completo de los datos, las decisiones de diseño y el detalle del pipeline ETL.
 
 ## Licencia
 
