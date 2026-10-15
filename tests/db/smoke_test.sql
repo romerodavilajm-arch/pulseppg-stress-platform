@@ -166,13 +166,20 @@ BEGIN
     END;
 
     BEGIN
+        INSERT INTO sessions (device_id, started_at, finished_at, sample_count, file_hash)
+        VALUES (dev, '2026-01-01 10:00:00+00', '2026-01-01 10:05:00+00', 15000, repeat('a', 64));
+        RAISE EXCEPTION 'FALLO: se aceptó dos veces el mismo archivo del mismo dispositivo';
+    EXCEPTION WHEN unique_violation THEN NULL;
+    END;
+
+    BEGIN
         INSERT INTO raw_ppg (time, session_id, ir, red)
         VALUES ('2026-01-01 10:00:00+00', -1, 0, 0);
         RAISE EXCEPTION 'FALLO: se aceptó una muestra de una sesión inexistente';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
 
-    RAISE NOTICE 'OK 5/6: restricciones de tiempo, hash, código, unicidad y FK';
+    RAISE NOTICE 'OK 5/6: restricciones de tiempo, hash, código, unicidad, reenvíos y FK';
 END $$;
 
 -- ------------------------------------------------------------
