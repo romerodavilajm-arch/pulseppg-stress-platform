@@ -1,0 +1,24 @@
+# Servicio systemd del nodo PulsePPG. Copiar a /etc/systemd/system/pulseppg.service.
+#   sudo systemctl enable --now pulseppg
+#   journalctl -u pulseppg -f
+[Unit]
+Description=PulsePPG nodo de captura (MAX30102 -> MQTT)
+# Hora sincronizada antes de capturar: los tiempos de las muestras salen del reloj.
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target
+
+[Service]
+Type=simple
+User=pulseppg
+Group=pulseppg
+SupplementaryGroups=i2c gpio
+EnvironmentFile=/etc/pulseppg/pulseppg.env
+WorkingDirectory=/opt/pulseppg
+# Crea /var/lib/pulseppg (capturas pendientes de ACK) y lo pasa en STATE_DIRECTORY.
+StateDirectory=pulseppg
+ExecStart=/opt/pulseppg/venv/bin/python -u /opt/pulseppg/pulseppg_node.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
