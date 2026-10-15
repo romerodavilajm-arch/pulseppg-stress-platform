@@ -86,11 +86,11 @@ Un clasificador de machine learning futuro puede implementarse como un Analyzer 
 
 ## Prueba local de la base de datos
 
-`compose.yaml` levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`, Mosquitto, el Ingestor y el Analyzer HRV.
+`compose.yaml` levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`, Mosquitto, el Ingestor, el Analyzer HRV y la API.
 
 ```bash
 cp .env.example .env            # opcional: credenciales y puerto
-docker compose up -d --wait     # construye Ingestor y Analyzer y espera a que todo esté sano
+docker compose up -d --wait     # construye Ingestor, Analyzer y API y espera a que todo esté sano
 docker compose exec -T db psql -U pulseppg -d pulseppg -v ON_ERROR_STOP=1 < tests/db/smoke_test.sql
 ```
 
@@ -145,6 +145,34 @@ docker compose up -d --wait
 La prueba envía tres sesiones simuladas de 5 minutos con `fake_pi.py --profile`: `relaxed` (HRV alta) debe salir `no_stress`, `stressed` (HRV baja, LF dominante) `stress` y `noisy` (ruido que tapa el pulso) `low_quality`. Termina con `ANALYZER E2E OK` y una tabla con las métricas de cada sesión. Los logs se ven con `docker compose logs -f analyzer`.
 
 Los umbrales de calidad no están fijados en la documentación; los valores por defecto son provisionales y se pueden ajustar con `HRV_SQI_MIN` (0.86), `HRV_PI_MIN` (0.1 %) y `HRV_SNR_MIN_DB` (0 dB) al calibrar con capturas reales.
+
+## API y web (sin Raspberry Pi)
+
+La API (`api/`, FastAPI + Jinja2 + Bootstrap por CDN) escucha en el puerto 8000 (`API_PORT`). Solo lee: los metadatos de `sessions` y `devices` y los resultados que el Analyzer guarda en su esquema `hrv`. No escribe en ninguna tabla.
+
+| Ruta | Qué devuelve |
+|------|--------------|
+| `/` | Formulario para consultar por código |
+| `/sesion/{code}` | Resultado para el usuario (fecha, duración, etiqueta, índice, BPM, SDNN, RMSSD, pNN50, LF/HF, frecuencia respiratoria) |
+| `/api/sessions/{code}` | Lo mismo en JSON, con las 16 métricas |
+| `/admin` | Tabla global con filtros por dispositivo, rango de fechas y resultado |
+| `/admin/sesiones/{id}` y `/api/admin/sessions[/{id}]` | Detalle y tabla en HTML o JSON |
+| `/api/docs` | Documentación OpenAPI |
+
+El código se acepta en minúsculas y con espacios o guiones. Un código inexistente devuelve 404 con "Código no encontrado". La API distingue el estado del análisis (`analysis.status`), que calcula al consultar y no se guarda en la base:
+
+- `completed`: hay resultado del Analyzer (`stress`, `no_stress` o `low_quality`).
+- `pending`: la sesión existe pero aún no se ha analizado.
+- `failed`: el Analyzer no pudo analizarla (fallo permanente o agotó `HRV_MAX_ATTEMPTS` intentos, 3 por defecto, el mismo valor que usa el Analyzer).
+
+En las sesiones `low_quality` no se muestran métricas ni índice, porque las métricas HRV de una señal mala no tienen sentido. La administración enseña solo las de calidad (`sqi`, `perfusion_index`, `snr_db`), que explican el descarte. Las fechas se muestran y filtran por día en la zona `API_TIMEZONE` (`America/Mexico_City` por defecto).
+
+```bash
+docker compose up -d --wait
+./tests/api/e2e.sh
+```
+
+La prueba detiene el Analyzer, envía una sesión y comprueba que la API la da por pendiente; lo vuelve a arrancar, envía una sesión con estrés, otra con ruido y una sin muestras, y comprueba el JSON y las páginas de usuario y de administración (etiquetas, ocultación de métricas en `low_quality`, análisis fallido, código no encontrado y filtros). Termina con `API E2E OK` y los enlaces para abrir el resultado y la administración en el navegador. Deja las sesiones de prueba en la base.
 
 ## Documentación
 

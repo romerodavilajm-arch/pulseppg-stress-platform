@@ -1,0 +1,5 @@
+{%- if s.status == "completed" -%}
+<span class="badge {{ {'stress': 'text-bg-danger', 'no_stress': 'text-bg-success', 'low_quality': 'text-bg-warning'}[s.label] }}">{{ LABEL_TEXT[s.label] }}</span>
+{%- else -%}
+<span class="badge {{ 'text-bg-secondary' if s.status == 'pending' else 'text-bg-dark' }}">{{ STATUS_TEXT[s.status] }}</span>
+{%- endif -%}
