@@ -4,7 +4,8 @@
 #   2. publica una sesión válida y espera el ACK con session_code,
 #   3. comprueba en la BD la sesión y sus 15 000 muestras,
 #   4. publica una sesión con hash incorrecto y espera ACK de error,
-#   5. publica desde un dispositivo no registrado y espera ACK de error.
+#   5. publica desde un dispositivo no registrado y espera ACK de error,
+#   6. reenvía dos veces la misma sesión y comprueba que no se duplica.
 # Requiere los servicios arriba: docker compose up -d --wait
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -30,5 +31,16 @@ fake_pi --device "$DEVICE" --corrupt-hash --samples 100 --expect error
 
 echo "== 5. Dispositivo no registrado"
 fake_pi --device "no-registrado-$$" --samples 100 --expect error
+
+echo "== 6. Reenvío de la misma sesión"
+START=$(date -u +%Y-%m-%dT%H:%M:%S+00:00)
+ACK1=$(fake_pi --device "$DEVICE" --samples 100 --start "$START")
+ACK2=$(fake_pi --device "$DEVICE" --samples 100 --start "$START")
+echo "ACK 1: $ACK1"
+echo "ACK 2: $ACK2"
+[ "$ACK1" = "$ACK2" ] || { echo "FALLO: el reenvío devolvió otro ACK"; exit 1; }
+SID=$(echo "$ACK1" | sed -n 's/.*"session_id": *\([0-9]*\).*/\1/p')
+N=$(psql -tAc "SELECT count(*) FROM sessions WHERE file_hash = (SELECT file_hash FROM sessions WHERE id = $SID)")
+[ "$N" = 1 ] || { echo "FALLO: hay $N sesiones con el mismo archivo"; exit 1; }
 
 echo "INGESTOR E2E OK (session_code=$CODE)"
