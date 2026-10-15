@@ -14,6 +14,7 @@
 --
 -- CLAVES NATURALES PARA ON CONFLICT:
 --   sessions:  (session_code)  -- generado por DEFAULT
+--   sessions:  (device_id, file_hash)  -- reenvíos de la Pi
 --   raw_ppg:   (session_id, time)
 --
 -- NOTA SOBRE TIMESCALEDB:
@@ -110,6 +111,12 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_device  ON sessions (device_id);
+
+-- Una misma captura (mismo archivo) de un mismo dispositivo solo se
+-- guarda una vez. Si la Pi reenvía la sesión porque no le llegó el
+-- ACK, el Ingestor devuelve el session_code que ya existe.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_sessions_device_file
+    ON sessions (device_id, file_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions (created_at DESC);
 
 COMMENT ON COLUMN sessions.session_code IS

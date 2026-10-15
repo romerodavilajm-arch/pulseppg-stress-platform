@@ -86,19 +86,25 @@ Un clasificador de machine learning futuro puede implementarse como un Analyzer 
 
 ## Prueba local de la base de datos
 
-`compose.yaml` levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`, Mosquitto y el Ingestor.
+`compose.yaml` levanta PostgreSQL 16 + TimescaleDB con el esquema de `init.sql`, Mosquitto, el Ingestor y el Analyzer HRV.
 
 ```bash
 cp .env.example .env            # opcional: credenciales y puerto
-docker compose up -d --wait     # construye el Ingestor y espera a que todo esté sano
+docker compose up -d --wait     # construye Ingestor y Analyzer y espera a que todo esté sano
 docker compose exec -T db psql -U pulseppg -d pulseppg -v ON_ERROR_STOP=1 < tests/db/smoke_test.sql
 ```
 
 La prueba termina con `SMOKE TEST OK` y no deja datos (corre en una transacción con `ROLLBACK`). `init.sql` solo se ejecuta con el volumen vacío; para recrear la base desde cero: `docker compose down -v`.
 
+Si la base ya existía antes del índice que evita sesiones duplicadas, aplícalo sin borrar datos (el Ingestor lo necesita):
+
+```bash
+docker compose exec -T db psql -U pulseppg -d pulseppg -v ON_ERROR_STOP=1 < migrations/001_uniq_sessions_device_file.sql
+```
+
 ## Prueba local del Ingestor (sin Raspberry Pi)
 
-`tests/ingestor/fake_pi.py` simula la Pi: genera 5 minutos de señal a 50 Hz, la comprime en JSONL + gzip, calcula su SHA-256, la publica en `ppg/{device_key}/session` y espera el ACK. `tests/ingestor/e2e.sh` registra el dispositivo `test-pi`, envía una sesión válida, comprueba en la BD que existen la sesión y sus 15 000 muestras, y verifica los ACK de error por hash incorrecto y por dispositivo no registrado.
+`tests/ingestor/fake_pi.py` simula la Pi: genera 5 minutos de señal a 50 Hz, la comprime en JSONL + gzip, calcula su SHA-256, la publica en `ppg/{device_key}/session` y espera el ACK. `tests/ingestor/e2e.sh` registra el dispositivo `test-pi`, envía una sesión válida, comprueba en la BD que existen la sesión y sus 15 000 muestras, verifica los ACK de error por hash incorrecto y por dispositivo no registrado, y comprueba que reenviar la misma sesión devuelve el mismo `session_code` sin duplicarla.
 
 ```bash
 docker compose up -d --wait
@@ -119,7 +125,26 @@ Formato del mensaje en `ppg/{device_key}/session`:
 }
 ```
 
-Cada línea del JSONL es una muestra `{"time": "<ISO 8601>", "ir": <int>, "red": <int>}`. El ACK de error lleva `error` con `invalid_payload`, `unknown_device` o `internal`. Los dispositivos deben estar dados de alta en `devices` antes de enviar.
+Cada línea del JSONL es una muestra `{"time": "<ISO 8601>", "ir": <int>, "red": <int>}`. El ACK de error lleva `error` con `invalid_payload`, `unknown_device` o `internal`. Los dispositivos deben estar dados de alta en `devices` antes de enviar. Si un dispositivo reenvía un archivo con el mismo `file_hash` (por ejemplo, porque no le llegó el ACK), el Ingestor no lo guarda otra vez y responde con el `session_id` y `session_code` de la sesión original.
+
+## Prueba local del Analyzer HRV (sin Raspberry Pi)
+
+El Analyzer (`analyzer/`) descubre las sesiones por el aviso MQTT `analysis/{session_id}/request` y, como respaldo, sondeando cada `ANALYZER_POLL_SECONDS` (60 s por defecto) las sesiones sin resultado. Lee `raw_ppg`, ejecuta el pipeline de `docs/flujo.md` §5 (`analyzer/pipeline.py`) y guarda sus resultados en su propio esquema `hrv`, que crea al arrancar (`analyzer/schema.sql`):
+
+- `hrv.metrics`: una fila por sesión y métrica (`bpm`, `sdnn`, `rmssd`, `pnn50`, `nn50`, `ibi_mean`, `lf`, `hf`, `lf_hf_ratio`, `lf_nu`, `hf_nu`, `total_power`, `sqi`, `perfusion_index`, `snr_db`, `respiratory_rate`).
+- `hrv.stress_results`: `label` (`stress`, `no_stress`, `low_quality`), `score` (reglas cumplidas / 4; `NULL` si es `low_quality`) y `rules_met`.
+- `hrv.failures`: sesiones que no se pudieron analizar y por qué (por ejemplo, señal de menos de 60 s). Los fallos transitorios se reintentan hasta 3 veces.
+
+Al terminar publica `analysis/{session_id}/complete` con la etiqueta y el score. No modifica `sessions` ni `raw_ppg`.
+
+```bash
+docker compose up -d --wait
+./tests/analyzer/e2e.sh
+```
+
+La prueba envía tres sesiones simuladas de 5 minutos con `fake_pi.py --profile`: `relaxed` (HRV alta) debe salir `no_stress`, `stressed` (HRV baja, LF dominante) `stress` y `noisy` (ruido que tapa el pulso) `low_quality`. Termina con `ANALYZER E2E OK` y una tabla con las métricas de cada sesión. Los logs se ven con `docker compose logs -f analyzer`.
+
+Los umbrales de calidad no están fijados en la documentación; los valores por defecto son provisionales y se pueden ajustar con `HRV_SQI_MIN` (0.86), `HRV_PI_MIN` (0.1 %) y `HRV_SNR_MIN_DB` (0 dB) al calibrar con capturas reales.
 
 ## Documentación
 

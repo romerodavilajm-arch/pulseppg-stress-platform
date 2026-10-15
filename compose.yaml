@@ -1,7 +1,7 @@
 # ============================================================
 # PulsePPG Stress Platform — Servicios Docker
-# Por ahora incluye la base de datos, Mosquitto y el Ingestor.
-# Analyzer y API se añadirán como servicios en esta misma red.
+# Incluye la base de datos, Mosquitto, el Ingestor y el Analyzer HRV.
+# La API se añadirá como servicio en esta misma red.
 # ============================================================
 
 services:
@@ -53,6 +53,29 @@ services:
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-pulseppg}
+      PGUSER: ${POSTGRES_USER:-pulseppg}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-pulseppg}
+    depends_on:
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - pulseppg
+
+  analyzer:
+    build: ./analyzer
+    container_name: pulseppg-analyzer
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      POLL_SECONDS: ${ANALYZER_POLL_SECONDS:-60}
+      HRV_SQI_MIN: ${HRV_SQI_MIN:-0.86}
+      HRV_PI_MIN: ${HRV_PI_MIN:-0.1}
+      HRV_SNR_MIN_DB: ${HRV_SNR_MIN_DB:-0}
       PGHOST: db
       PGDATABASE: ${POSTGRES_DB:-pulseppg}
       PGUSER: ${POSTGRES_USER:-pulseppg}

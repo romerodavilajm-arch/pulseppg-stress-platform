@@ -160,7 +160,12 @@ class Database:
         self.conn = None
 
     def store_session(self, device_key, meta, samples):
-        """Persiste sesión y muestras en una transacción. Devuelve (id, session_code)."""
+        """Persiste sesión y muestras en una transacción.
+
+        Devuelve (id, session_code, nueva). Si el dispositivo ya había enviado
+        ese mismo archivo (reenvío de la Pi tras perder el ACK), no inserta nada
+        y devuelve la sesión existente con nueva=False.
+        """
         for attempt in range(1, CODE_RETRIES + 1):
             conn = self._connection()
             try:
@@ -169,23 +174,36 @@ class Database:
                     row = cur.fetchone()
                     if row is None:
                         raise UnknownDevice(device_key)
+                    device_id = row[0]
 
                     cur.execute(
                         "INSERT INTO sessions"
                         " (device_id, started_at, finished_at, sample_count, file_hash)"
                         " VALUES (%s, %s, %s, %s, %s)"
+                        " ON CONFLICT (device_id, file_hash) DO NOTHING"
                         " RETURNING id, session_code",
-                        (row[0], meta["started_at"], meta["finished_at"],
+                        (device_id, meta["started_at"], meta["finished_at"],
                          meta["sample_count"], meta["file_hash"]),
                     )
-                    session_id, session_code = cur.fetchone()
+                    row = cur.fetchone()
+                    if row is None:
+                        # Reenvío: la sesión ya está persistida con sus muestras
+                        # (se guardaron en la misma transacción que la creó).
+                        cur.execute(
+                            "SELECT id, session_code FROM sessions"
+                            " WHERE device_id = %s AND file_hash = %s",
+                            (device_id, meta["file_hash"]),
+                        )
+                        session_id, session_code = cur.fetchone()
+                        return session_id, session_code, False
+                    session_id, session_code = row
 
                     buf = io.StringIO()
                     for t, ir, red in samples:
                         buf.write(f"{t.isoformat()}\t{session_id}\t{ir}\t{red}\n")
                     buf.seek(0)
                     cur.copy_expert("COPY raw_ppg (time, session_id, ir, red) FROM STDIN", buf)
-                return session_id, session_code
+                return session_id, session_code, True
             except errors.UniqueViolation as e:
                 # La unicidad del código la arbitra PostgreSQL: si colisiona,
                 # se reintenta la transacción completa (ya revertida).
@@ -227,7 +245,7 @@ def handle_session(client, db, device_key, payload):
         return
 
     try:
-        session_id, session_code = db.store_session(device_key, meta, samples)
+        session_id, session_code, new = db.store_session(device_key, meta, samples)
     except UnknownDevice:
         log.warning("sesión descartada: dispositivo no registrado %r", device_key)
         publish_json(client, ack_topic, {"status": "error", "error": "unknown_device"})
@@ -237,7 +255,10 @@ def handle_session(client, db, device_key, payload):
         publish_json(client, ack_topic, {"status": "error", "error": "internal"})
         return
 
-    log.info("sesión %d (%s) de %s: %d muestras", session_id, session_code, device_key, len(samples))
+    if new:
+        log.info("sesión %d (%s) de %s: %d muestras", session_id, session_code, device_key, len(samples))
+    else:
+        log.info("reenvío de la sesión %d (%s) de %s: no se duplica", session_id, session_code, device_key)
     publish_json(client, ack_topic,
                  {"session_id": session_id, "session_code": session_code, "status": "received"})
     # Solo un aviso: si falla, la sesión ya está persistida.
