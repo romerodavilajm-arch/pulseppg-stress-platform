@@ -14,7 +14,7 @@ Guía práctica para poner en marcha, usar, probar y ampliar el prototipo. Para 
 | `analyzer` (HRV) | `analyzer/` | Calcula métricas HRV y la clasificación de estrés; guarda en su propio esquema `hrv` |
 | `api` | `api/` | Web de usuario (`/`), administración (`/admin`) y JSON en el puerto 8000. Solo lee |
 | Nodo Raspberry Pi | `raspberry-pi/` | Captura 5 min con el MAX30102 y publica la sesión por MQTT |
-| Pi simuladas | `compose.sim.yaml`, `tests/ingestor/fake_pi.py` | Sustituyen a la Pi real para probar |
+| Pi simulada | `tests/ingestor/fake_pi.py` | Sustituye a la Pi real para probar; corre con la imagen del Ingestor |
 
 El recorrido es: la Pi publica la sesión, el Ingestor la guarda y devuelve el código, el Analyzer la procesa y la API muestra el resultado.
 
@@ -98,18 +98,19 @@ Sigue `raspberry-pi/setup.md` una vez para instalar el nodo. Después, el uso di
 
 Si el servidor no responde, el nodo guarda la sesión y la reintenta cada `RETRY_SECONDS` (5 min); el código aparece cuando llega el ACK. Comandos útiles en la Pi: `journalctl -u pulseppg -f` (log), `sudo systemctl restart pulseppg` (tras cambiar `/etc/pulseppg/pulseppg.env`), `sudo systemctl stop pulseppg` (detener).
 
-### Sin Raspberry Pi (simuladores)
+### Sin Raspberry Pi (simulador)
 
-`compose.sim.yaml` añade cuatro Pi simuladas (`pi1` a `pi4`) que esperan a que lances `fake_pi.py` dentro de ellas:
+`tests/ingestor/fake_pi.py` hace de Pi. Se ejecuta con la imagen del Ingestor, sin contenedores extra:
 
 ```bash
-docker compose -f compose.yaml -f compose.sim.yaml up -d --wait
+docker compose up -d --wait
 docker compose exec -T db psql -U pulseppg -d pulseppg \
   -c "INSERT INTO devices (device_key) VALUES ('pi-1'), ('pi-2'), ('pi-3'), ('pi-4') ON CONFLICT (device_key) DO NOTHING"
-docker compose -f compose.yaml -f compose.sim.yaml exec pi1 python fake_pi.py --device pi-1 --profile relaxed
+docker compose run --rm --no-deps -v ./tests:/tests ingestor \
+  python /tests/ingestor/fake_pi.py --device pi-1 --profile relaxed
 ```
 
-Perfiles disponibles: `relaxed` (sale `no_stress`), `stressed` (`stress`), `noisy` (`low_quality`) y `sine` (`stress`, ritmo sin variabilidad). `python fake_pi.py -h` lista el resto de opciones (`--samples`, `--start`, `--corrupt-hash`, `--expect`). Para parar todo, usa los mismos `-f` con `down`.
+Perfiles disponibles: `relaxed` (sale `no_stress`), `stressed` (`stress`), `noisy` (`low_quality`) y `sine` (`stress`, ritmo sin variabilidad). `--help` lista el resto de opciones (`--samples`, `--start`, `--corrupt-hash`, `--expect`).
 
 ---
 
@@ -156,7 +157,7 @@ El servidor no necesita cambios para recibir más nodos: el Ingestor se suscribe
 
 Lo que no cambia: el Ingestor, el Analyzer, la API y el esquema. Las sesiones de todos los nodos aparecen en `/admin` y se pueden filtrar por dispositivo.
 
-Para probar varios nodos sin hardware, los cuatro simuladores de `compose.sim.yaml` ya cubren el caso. Si se necesitan más, se añade otro servicio `pi5` con `<<: *pi-sim` y su `container_name` en ese archivo, y se da de alta su clave.
+Para probar varios nodos sin hardware, basta con dar de alta más claves y lanzar `fake_pi.py` con cada `--device` (sección 5); no hace falta añadir contenedores.
 
 Ten en cuenta que, en el prototipo, hay un solo Ingestor y procesa los mensajes de uno en uno; con unos pocos nodos que envían una sesión cada 5 minutos no es un límite práctico.
 
@@ -183,7 +184,7 @@ Es el caso previsto por la arquitectura y no afecta a lo que ya funciona. Un ana
 
 Con eso, el Ingestor, la base central y el Analyzer HRV siguen igual. Lo único que no aparece solo es la presentación: la API actual lee únicamente el esquema `hrv`, así que para ver los resultados del nuevo analizador en la web habría que añadir esa lectura a `api/`.
 
-Para comprobarlo sin afectar al resto, se puede levantar solo el servicio nuevo (`docker compose up -d --wait nombre-del-servicio`) y reenviar sesiones con los simuladores; las pruebas e2e existentes deben seguir pasando.
+Para comprobarlo sin afectar al resto, se puede levantar solo el servicio nuevo (`docker compose up -d --wait nombre-del-servicio`) y reenviar sesiones con `fake_pi.py`; las pruebas e2e existentes deben seguir pasando.
 
 ### Más réplicas del Analyzer HRV
 
