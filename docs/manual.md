@@ -140,7 +140,7 @@ docker compose exec -T db psql -U pulseppg -d pulseppg -v ON_ERROR_STOP=1 < test
 ./tests/api/e2e.sh         # API E2E OK
 ```
 
-Las pruebas e2e dejan sesiones de prueba en la base (la de humo no). GitHub Actions (`.github/workflows/ci.yml`) ejecuta las cuatro en cada PR y en cada push a `main`.
+Las pruebas e2e dejan sesiones de prueba en la base (la de humo no). GitHub Actions (`.github/workflows/ci.yml`) ejecuta las cuatro en cada PR y en cada push a `main`. Qué comprueba cada una está en [`pruebas.md`](pruebas.md).
 
 Para ver qué está pasando: `docker compose logs -f ingestor`, `docker compose logs -f analyzer` o `docker compose logs -f api`.
 
