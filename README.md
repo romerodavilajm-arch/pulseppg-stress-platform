@@ -174,40 +174,34 @@ docker compose up -d --wait
 
 La prueba detiene el Analyzer, envía una sesión y comprueba que la API la da por pendiente; lo vuelve a arrancar, envía una sesión con estrés, otra con ruido y una sin muestras, y comprueba el JSON y las páginas de usuario y de administración (etiquetas, ocultación de métricas en `low_quality`, análisis fallido, código no encontrado y filtros). Termina con `API E2E OK` y los enlaces para abrir el resultado y la administración en el navegador. Deja las sesiones de prueba en la base.
 
-## Cuatro Pi simuladas (casos manuales)
+## Envíos manuales sin Raspberry Pi
 
-`compose.sim.yaml` añade cuatro contenedores, `pi1` a `pi4`, con la misma imagen (la del Ingestor, construida una vez como `pulseppg-pi-sim`) y el mismo script, `tests/ingestor/fake_pi.py`, montado en `/sim`. Los contenedores no envían nada al arrancar: quedan en espera para que entres a cada uno y lances el script con sus parámetros. Se combina con `compose.yaml`, así que `docker compose up` sin `-f` sigue arrancando solo los servicios normales.
+`tests/ingestor/fake_pi.py` también sirve para enviar sesiones a mano. Se ejecuta con la imagen del Ingestor, la misma que usan las pruebas e2e, así que no hace falta ningún contenedor ni archivo de compose aparte.
 
-```bash
-docker compose -f compose.yaml -f compose.sim.yaml up -d --wait
-```
-
-Cada Pi debe estar dada de alta en `devices` antes de enviar (la Pi no toca la base de datos):
+Cada dispositivo debe estar dado de alta en `devices` antes de enviar (la Pi no toca la base de datos):
 
 ```bash
 docker compose exec -T db psql -U pulseppg -d pulseppg \
   -c "INSERT INTO devices (device_key) VALUES ('pi-1'), ('pi-2'), ('pi-3'), ('pi-4') ON CONFLICT (device_key) DO NOTHING"
 ```
 
-Para entrar a un contenedor y ejecutar el script a mano:
+Para enviar una sesión:
 
 ```bash
-docker compose -f compose.yaml -f compose.sim.yaml exec pi1 bash
-python fake_pi.py --device pi-1 --profile relaxed
+docker compose run --rm --no-deps -v ./tests:/tests ingestor \
+  python /tests/ingestor/fake_pi.py --device pi-1 --profile relaxed
 ```
 
-Los cuatro casos sugeridos, uno por contenedor (también se pueden lanzar sin entrar, con `exec` y el comando completo):
+Los cuatro casos sugeridos:
 
-| Contenedor | Comando | Resultado esperado |
-|------------|---------|--------------------|
-| `pi1` | `python fake_pi.py --device pi-1 --profile relaxed` | `no_stress` (HRV alta) |
-| `pi2` | `python fake_pi.py --device pi-2 --profile stressed` | `stress` (HRV baja, LF dominante) |
-| `pi3` | `python fake_pi.py --device pi-3 --profile noisy` | `low_quality` (el ruido tapa el pulso) |
-| `pi4` | `python fake_pi.py --device pi-4 --profile sine` | `stress` (ritmo perfectamente regular, sin variabilidad) |
+| Dispositivo | Parámetros | Resultado esperado |
+|-------------|-----------|--------------------|
+| `pi-1` | `--device pi-1 --profile relaxed` | `no_stress` (HRV alta) |
+| `pi-2` | `--device pi-2 --profile stressed` | `stress` (HRV baja, LF dominante) |
+| `pi-3` | `--device pi-3 --profile noisy` | `low_quality` (el ruido tapa el pulso) |
+| `pi-4` | `--device pi-4 --profile sine` | `stress` (ritmo perfectamente regular, sin variabilidad) |
 
-El script imprime el ACK con el `session_code`, que se consulta en `http://localhost:8000/sesion/{code}` cuando el Analyzer termina. Otros parámetros útiles: `--start` (fecha fija, para simular un reenvío con el mismo hash), `--corrupt-hash` con `--expect error` (ACK de error) y `--samples` (duración; 15 000 muestras son 5 minutos a 50 Hz). `python fake_pi.py -h` los lista todos.
-
-Para detener todo, incluidos los simuladores, usa los mismos archivos: `docker compose -f compose.yaml -f compose.sim.yaml down`.
+El script imprime el ACK con el `session_code`, que se consulta en `http://localhost:8000/sesion/{code}` cuando el Analyzer termina. Otros parámetros útiles: `--start` (fecha fija, para simular un reenvío con el mismo hash), `--corrupt-hash` con `--expect error` (ACK de error) y `--samples` (duración; 15 000 muestras son 5 minutos a 50 Hz). `--help` los lista todos.
 
 ## Raspberry Pi real
 
