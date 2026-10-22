@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Sesión {{ session.session_code }} · PulsePPG{% endblock %}
+{% block head %}{% if session.analysis.status == "pending" %}<meta http-equiv="refresh" content="{{ REFRESH_SECONDS }}">{% endif %}{% endblock %}
 {% block content %}
 {% set a = session.analysis %}
 <div class="row justify-content-center">
@@ -16,7 +17,7 @@
         </dl>
 
         {% if a.status == "pending" %}
-          <div class="alert alert-info mb-0">El análisis de esta sesión está pendiente. Vuelve a consultar en unos minutos.</div>
+          <div class="alert alert-info mb-0">El análisis de esta sesión está pendiente. Esta página se actualiza sola cada {{ REFRESH_SECONDS }} segundos.</div>
         {% elif a.status == "failed" %}
           <div class="alert alert-warning mb-0">No se pudo analizar esta sesión. Repite la prueba.</div>
         {% elif a.label == "low_quality" %}
