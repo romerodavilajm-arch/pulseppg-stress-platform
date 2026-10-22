@@ -16,6 +16,7 @@ Administración (sin autenticación en el prototipo):
   GET /api/admin/sessions/{id}
 
 GET /health comprueba la conexión con PostgreSQL.
+GET /static/...              Bootstrap (sin CDN, para funcionar sin internet)
 """
 
 import logging
@@ -26,6 +27,7 @@ from zoneinfo import ZoneInfo
 import psycopg2
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import db
@@ -34,6 +36,9 @@ log = logging.getLogger("api")
 
 NOT_FOUND = "Código no encontrado"
 TZ = ZoneInfo(db.TIMEZONE)
+
+# Segundos entre recargas de /sesion/{code} mientras el análisis está pendiente.
+REFRESH_SECONDS = 10
 
 LABEL_TEXT = {"stress": "Estrés", "no_stress": "Sin estrés", "low_quality": "Baja calidad"}
 STATUS_TEXT = {"pending": "Análisis pendiente", "failed": "Análisis fallido"}
@@ -51,6 +56,8 @@ USER_METRICS = [("bpm", "Frecuencia cardíaca", "lpm", 0),
 app = FastAPI(title="PulsePPG Stress Platform", docs_url="/api/docs", redoc_url=None,
               openapi_url="/api/openapi.json")
 templates = Jinja2Templates(directory=Path(__file__).with_name("templates"))
+# Bootstrap se sirve desde la propia API para que la web funcione sin internet.
+app.mount("/static", StaticFiles(directory=Path(__file__).with_name("static")), name="static")
 
 
 def localtime(value):
@@ -72,7 +79,8 @@ def number(value, decimals=2):
 
 templates.env.filters.update(localtime=localtime, duration=duration, number=number)
 templates.env.globals.update(LABEL_TEXT=LABEL_TEXT, STATUS_TEXT=STATUS_TEXT,
-                             USER_METRICS=USER_METRICS, TIMEZONE=db.TIMEZONE)
+                             USER_METRICS=USER_METRICS, TIMEZONE=db.TIMEZONE,
+                             REFRESH_SECONDS=REFRESH_SECONDS)
 
 
 def render(request, name, status_code=200, **context):

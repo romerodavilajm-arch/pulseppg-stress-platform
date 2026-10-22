@@ -66,7 +66,7 @@ Los umbrales de calidad no están fijados en la documentación; los valores por 
 
 ## API y web (sin Raspberry Pi)
 
-La API (`api/`, FastAPI + Jinja2 + Bootstrap por CDN) escucha en el puerto 8000 (`API_PORT`). Solo lee: los metadatos de `sessions` y `devices` y los resultados que el Analyzer guarda en su esquema `hrv`. No escribe en ninguna tabla.
+La API (`api/`, FastAPI + Jinja2 + Bootstrap servido en local desde `api/static/`) escucha en el puerto 8000 (`API_PORT`). Solo lee: los metadatos de `sessions` y `devices` y los resultados que el Analyzer guarda en su esquema `hrv`. No escribe en ninguna tabla.
 
 | Ruta | Qué devuelve |
 |------|--------------|
